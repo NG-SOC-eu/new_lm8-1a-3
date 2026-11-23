@@ -1,0 +1,108 @@
+---
+# Role: common
+# Applied to ALL nodes. Sets timezone, locale, installs base packages,
+# writes /etc/hosts with topology IPs, and creates the student analyst user.
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Set locale
+  ansible.builtin.copy:
+    content: "LANG={{ common_locale }}\n"
+    dest: /etc/default/locale
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Detect Kali APT repositories
+  ansible.builtin.shell:
+    cmd: grep -rqsiE 'kali\.(org|download)|kali-rolling' /etc/apt/sources.list /etc/apt/sources.list.d/
+  register: kali_repo_present
+  changed_when: false
+  failed_when: false
+
+- name: Install Kali archive signing key (offline, vendored)
+  ansible.builtin.copy:
+    src: kali-archive-keyring.gpg
+    dest: /etc/apt/trusted.gpg.d/kali-archive-keyring.gpg
+    owner: root
+    group: root
+    mode: "0644"
+  when: kali_repo_present.rc == 0
+
+- name: Update apt cache (Debian/Ubuntu)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install common packages
+  ansible.builtin.package:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Write /etc/hosts with topology hostnames
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: "0644"
+  when: common_hostname_in_hosts | bool
+
+- name: Create student analyst user
+  ansible.builtin.user:
+    name: "{{ student_user }}"
+    password: "{{ student_password_hash }}"
+    shell: /bin/bash
+    groups: sudo
+    append: true
+    state: present
+
+- name: Inject platform SSH public key for student user
+  ansible.posix.authorized_key:
+    user: "{{ student_user }}"
+    key: "{{ lookup('file', global_ssh_public_user_key) }}"
+    state: present
+  when: global_ssh_public_user_key is defined and global_ssh_public_user_key | length > 0
+
+- name: Allow analyst sudo without password (training environment)
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ student_user }}"
+    content: "{{ student_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: Enable SSH password auth for Guacamole console (high-precedence drop-in)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-crczp-guacamole.conf
+    mode: "0644"
+    content: |
+      # Required by CyberRangeCZ "Open console" (Apache Guacamole over SSH).
+      PasswordAuthentication yes
+      KbdInteractiveAuthentication yes
+  notify: restart ssh
+
+- name: Neutralize conflicting 'PasswordAuthentication no' in cloud-init drop-ins
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^\s*PasswordAuthentication\s+no\s*$'
+    replace: 'PasswordAuthentication yes'
+  loop:
+    - /etc/ssh/sshd_config
+    - /etc/ssh/sshd_config.d/50-cloud-init.conf
+    - /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+  failed_when: false
+  notify: restart ssh
+
+- name: Set MOTD with scenario banner
+  ansible.builtin.copy:
+    dest: /etc/motd
+    content: |
+      ============================================================
+        {{ scenario_name }}
+        CyberRangeCZ/KYPO  |  Sandbox: {{ global_sandbox_name | default('dev') }}
+        Role: {{ inventory_hostname }}
+      ============================================================
+    mode: "0644"

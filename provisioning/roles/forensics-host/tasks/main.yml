@@ -1,0 +1,286 @@
+---
+# Role: forensics-host (analyst-host)
+# Deploys DFIR toolset for Exercise 2 (Incident Responder).
+# Tools: Velociraptor, The Sleuth Kit, Volatility 3, tcpdump, hashdeep,
+#        tshark, binutils (strings), binwalk, foremost.
+# Also deploys the express forensic report template (Activity 2.0.3).
+
+- name: Install DFIR base packages
+  ansible.builtin.apt:
+    name:
+      - tcpdump
+      - tshark
+      - wireshark-common
+      - sleuthkit
+      - autopsy
+      - binwalk
+      - foremost
+      - hashdeep
+      - binutils
+      - python3-pip
+      - python3-venv
+      - git
+      - unzip
+      - p7zip-full
+    state: present
+    update_cache: true
+
+- name: Install Volatility 3 (memory forensics)
+  ansible.builtin.pip:
+    name: volatility3
+    state: present
+    executable: pip3
+    extra_args: "--break-system-packages"
+  ignore_errors: true
+
+- name: Create DFIR workspace directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"
+    mode: "0755"
+  loop:
+    - /home/{{ student_user }}/evidence
+    - /home/{{ student_user }}/reports
+    - /home/{{ student_user }}/tools
+    - /home/{{ student_user }}/artefacts
+    - /opt/ngsoc-forensics
+
+- name: Deploy Velociraptor server binary
+  ansible.builtin.get_url:
+    url: "https://github.com/Velocidex/velociraptor/releases/download/v0.7.0/velociraptor-v0.7.0-linux-amd64"
+    dest: /usr/local/bin/velociraptor
+    mode: "0755"
+  ignore_errors: true
+
+- name: Ensure Velociraptor config directory exists
+  ansible.builtin.file:
+    path: /etc/velociraptor
+    state: directory
+    mode: "0700"
+
+- name: Generate Velociraptor server configuration
+  ansible.builtin.shell:
+    cmd: /usr/local/bin/velociraptor config generate > /etc/velociraptor/server.config.yaml
+    creates: /etc/velociraptor/server.config.yaml
+    executable: /bin/bash
+  ignore_errors: true
+
+- name: Create Velociraptor data directory
+  ansible.builtin.file:
+    path: "{{ velociraptor_datastore }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy Velociraptor systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/velociraptor.service
+    content: |
+      [Unit]
+      Description=Velociraptor DFIR Server (NG-SOC LM8)
+      After=network.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/velociraptor --config /etc/velociraptor/server.config.yaml frontend -v
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+
+- name: Enable Velociraptor service
+  ansible.builtin.systemd:
+    name: velociraptor
+    enabled: true
+    daemon_reload: true
+  ignore_errors: true
+
+- name: Deploy chain-of-custody log template
+  ansible.builtin.copy:
+    dest: /home/{{ student_user }}/reports/chain-of-custody-template.txt
+    content: |
+      ============================================================
+      DIGITAL EVIDENCE CHAIN OF CUSTODY
+      NG-SOC LM8 Exercise 2 – Incident Responder
+      ============================================================
+      Case Reference: [CASE-ID]
+      Analyst: [ANALYST NAME]
+      Date/Time (UTC): [YYYY-MM-DDTHH:MM:SSZ]
+
+      EVIDENCE ITEM LOG
+      -----------------
+      Item #  | Description               | Source Host | Hash (SHA256)         | Acquired By | Date/Time
+      --------|---------------------------|-------------|----------------------|-------------|----------
+      001     | disk-image-employee-ws.dd | employee-ws |                      |             |
+      002     | memory-dump-employee-ws.  | employee-ws |                      |             |
+      003     | auth-log-file-server.gz   | file-server |                      |             |
+      004     | netflow-capture.pcap      | router-int  |                      |             |
+
+      TRANSFER LOG
+      ------------
+      Transferred from: [SOURCE] to: [DESTINATION] at [DATE/TIME] by [NAME]
+      Purpose: [REASON]
+
+      INTEGRITY VERIFICATION
+      ----------------------
+      Hash algorithm: SHA256
+      Verified by: [ANALYST NAME]
+      Verification date: [DATE]
+      Result: PASS / FAIL
+    mode: "0644"
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"
+
+- name: Deploy express forensic report template (Activity 2.0.3)
+  ansible.builtin.copy:
+    dest: /home/{{ student_user }}/reports/express-forensic-report.md
+    content: |
+      # Express Forensic Report
+      **Classification:** RESTRICTED (Training) | **Reference:** [EFR-001]
+      **Analyst:** [Name / Role] | **Date/Time (UTC):** [YYYY-MM-DDTHH:MM:SSZ]
+      **Case:** NG-SOC LM8 – Black Falcon Campaign (Activity 2.0.3)
+
+      ---
+
+      ## 1. Scope and Assumptions
+
+      **Systems examined:**
+      - [ ] employee-ws (10.10.30.10)
+      - [ ] file-server (10.10.30.20)
+      - [ ] db-server (10.10.30.30)
+      - [ ] web-banking (10.10.20.10)
+
+      **Time window:** [start UTC] – [end UTC]
+
+      **Assumptions and limitations:**
+      [Document what you could NOT examine and why – missing logs, live system vs image, etc.]
+
+      ---
+
+      ## 2. Artefacts Reviewed
+
+      | # | Artefact | Source | Hash (SHA256) | Integrity |
+      |---|---|---|---|---|
+      | 1 | wazuh-alerts-ex2.json | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+      | 2 | endpoint-process-list.txt | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+      | 3 | netstat-employee-ws.txt | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+      | 4 | web-banking-access.log | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+      | 5 | file-metadata.txt | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+      | 6 | timeline-clues.txt | /opt/ngsoc-artifacts/forensic-bundle/ | | PASS/FAIL |
+
+      ---
+
+      ## 3. Timeline (High Level)
+
+      | Time (UTC) | Event | Evidence Source | ATT&CK |
+      |---|---|---|---|
+      | | | | |
+      | | | | |
+      | | | | |
+
+      [Fill in from timeline-clues.txt and corroborating artefacts]
+
+      ---
+
+      ## 4. Findings
+
+      ### F-01 – [Title]
+      **Severity:** CRITICAL / HIGH / MEDIUM / LOW
+      **Host:** [hostname]
+      **Description:** [What happened, in plain language]
+      **Evidence:** [Which artefact(s) confirm this finding]
+      **ATT&CK Technique:** [Txxxx – Name]
+
+      ### F-02 – [Title]
+      [Repeat structure for each finding]
+
+      ---
+
+      ## 5. Indicators of Compromise
+
+      | Type | Value | Source | Confidence |
+      |---|---|---|---|
+      | IP | | | HIGH/MED/LOW |
+      | Domain | | | |
+      | MD5 | | | |
+      | SHA256 | | | |
+      | Filename | | | |
+      | File path | | | |
+
+      [Cross-check against MISP (Exercise 3) for known IoCs]
+
+      ---
+
+      ## 6. Impact Assessment
+
+      **Confidentiality:** [Was data exfiltrated or accessed without authorisation?]
+      **Integrity:** [Were files modified, encrypted or deleted?]
+      **Availability:** [Were systems or services disrupted?]
+
+      **Estimated affected users / records:** [number or "unknown"]
+      **Regulatory implications:** [GDPR, NIS2, sector-specific — any notification obligation?]
+
+      ---
+
+      ## 7. Recommendations
+
+      | Priority | Recommendation | Owner | Target Date |
+      |---|---|---|---|
+      | IMMEDIATE | | IT Security | |
+      | SHORT-TERM | | | |
+      | LONG-TERM | | | |
+
+      **Immediate containment actions taken during this investigation:**
+      1.
+      2.
+      3.
+    mode: "0644"
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"
+
+- name: Deploy forensic analysis quick-reference card
+  ansible.builtin.copy:
+    dest: /home/{{ student_user }}/tools/forensics-quickref.txt
+    content: |
+      DFIR QUICK REFERENCE – NG-SOC LM8
+      ====================================
+
+      # Hash verification (chain of custody)
+      sha256sum /path/to/file
+      hashdeep -r /dir/to/hash > manifest.txt
+      hashdeep -r -a -k manifest.txt /dir/to/verify
+
+      # Disk imaging (write-blocked)
+      dcfldd if=/dev/sda of=/evidence/disk-image.dd hash=sha256 hashlog=/evidence/disk-image.sha256
+
+      # Memory acquisition (if LiME module available)
+      insmod lime-$(uname -r).ko "path=/evidence/memory.lime format=lime"
+
+      # Process listing (Velociraptor hunt)
+      velociraptor query "SELECT * FROM pslist()" --config /etc/velociraptor/server.config.yaml
+
+      # Network connections
+      ss -tulpn
+      netstat -an
+
+      # Volatile data capture (order of volatility)
+      1. Running processes: ps aux
+      2. Network connections: ss -an
+      3. Open files: lsof
+      4. System logs: journalctl --no-pager
+      5. Disk image: dcfldd / dd
+
+      # The Sleuth Kit
+      mmls disk.dd              # Partition table
+      fls -r -o <offset> disk.dd  # File system listing
+      icat -o <offset> disk.dd <inode>  # Extract file by inode
+
+      # Volatility 3
+      python3 -m volatility3 -f memory.lime linux.pslist
+      python3 -m volatility3 -f memory.lime linux.netstat
+      python3 -m volatility3 -f memory.lime linux.bash
+    mode: "0644"
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"

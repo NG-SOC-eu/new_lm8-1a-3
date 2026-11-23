@@ -1,0 +1,74 @@
+---
+# Global variables available to all hosts
+# Adjust these to match your deployment environment.
+
+# Scenario name (used in banners and artefact paths)
+scenario_name: "NG-SOC LM8 – Incident Response and Forensics (Sub Case 1a)"
+
+# Internal DNS suffix used in synthetic IoC hostnames
+internal_domain: "ngsoc-lm8.internal"
+
+# Analyst training user (created on security-tools hosts for student access)
+student_user: "analyst"
+# Known training password (anti-lockout safety net for the GUI console).
+# Password: ngsoc-analyst  ->  log in as `analyst` / `ngsoc-analyst` if a prompt ever appears.
+# Regenerate with: openssl passwd -6 'ngsoc-analyst'
+student_password_hash: "$6$6aHKsd3pq5Ub9XzT$rzvhPeKZuEkHw8KeHrOesZ99metyqWKFRwtMXZTkyD.sQtKqlmn7Wl9uYyinr3l.cJyHnjnFGctKhPMjbmgea."
+
+# Common package list installed on every node
+common_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - net-tools
+  - tcpdump
+  - nmap
+  - unzip
+  - python3
+  - python3-pip
+  - jq
+  - htop
+  - tree
+  - ca-certificates
+  - gnupg
+  - lsb-release
+
+# NTP server (use platform's internal NTP if available)
+ntp_server: "pool.ntp.org"
+
+# Wazuh version
+wazuh_version: "4.7"
+
+# MISP version (Docker tag)
+misp_docker_tag: "latest"
+
+# MISP / CTI host container images.
+# mariadb_image and redis_image can be re-pointed to an internal mirror
+# (Harbor / Nexus / ECR pull-through cache) to avoid Docker Hub's
+# unauthenticated pull rate limit. Defaults pull straight from Docker Hub.
+misp_image: "ghcr.io/misp/misp-docker/misp-core:latest"
+mariadb_image: "mariadb:10.11"
+redis_image: "redis:7-alpine"
+
+# CTI host IP (used as MISP base URL)
+cti_ip: "10.10.40.30"
+
+# Optional Docker registry authentication to dodge Docker Hub rate limits.
+# Leave both empty to keep the default behaviour (no login performed).
+# If used, vault docker_registry_token (a Docker Hub PAT).
+docker_registry_user: ""
+docker_registry_token: ""
+
+# Synthetic C2 details (all fictional, contained within the sandbox)
+c2_ip: "10.10.20.20"
+c2_port: 4444
+c2_domain: "update-svc.blackfalcon-sim.internal"
+
+# Banking web application virtual host
+banking_app_ip: "10.10.20.10"
+banking_app_fqdn: "web-banking.ngsoc-lm8.internal"
+
+# Velociraptor server on analyst-host
+velociraptor_server_ip: "10.10.40.20"
+velociraptor_port: 8000

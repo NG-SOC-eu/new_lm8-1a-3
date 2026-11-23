@@ -1,0 +1,6 @@
+---
+# Allowed inbound connections to the DMZ (simulated perimeter firewall)
+dmz_allowed_inbound_ports:
+  - 80    # HTTP – web-banking
+  - 443   # HTTPS – web-banking
+  - 4444  # C2 listener (simulated – exercise artefact only)

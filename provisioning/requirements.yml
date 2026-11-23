@@ -1,0 +1,28 @@
+---
+# Add the required logging role
+roles:
+  - name: sandbox-logging
+    src: https://github.com/cyberrangecz/ansible-role-sandbox-logging.git
+    scm: git
+    version: v1.0.0
+
+
+# Ansible Galaxy role dependencies for NG-SOC LM8 provisioning.
+# Install with: ansible-galaxy install -r requirements.yml
+# (Run this from the provisioning/ directory before deploying.)
+collections:
+  - name: ansible.posix
+    version: ">=1.3.0"
+  - name: community.docker
+    version: ">=3.4.0"
+
+#roles: []
+
+# No external Galaxy roles are required; all logic is implemented in-repo.
+# If you prefer a community MySQL role instead of the inline tasks, uncomment:
+#
+# roles:
+#   - name: geerlingguy.mysql
+#     version: "4.6.3"
+#   - name: geerlingguy.php
+#     version: "5.2.0"
