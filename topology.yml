@@ -27,7 +27,7 @@
 #   4. All user-defined CIDRs below are disjoint from 100.100.100.0/24
 # ============================================================================
 
-name: ngsoc-lm8-subcase1a
+name: lm8-1a-3-puc2-subcase1a-Incident-response-and-forensics-advanced
 
 # ─── HOSTS ───────────────────────────────────────────────────────────────────
 hosts:
